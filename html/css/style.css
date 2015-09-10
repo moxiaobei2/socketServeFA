@@ -1,0 +1,57 @@
+* { color:#333333; list-style:none; margin:0; padding:0; outline:none; }
+body { background:#FFF url(img/body.png) repeat-x 0 0; color:#333333; font:12px/14px Geneva,"宋体",Tahoma,sans-serif; }
+img, table, tr, td { border:none; border-collapse:collapse; }
+
+a { color:#84A8C8; text-decoration:none; }
+a:link { color:#4199D7; }
+.hidden { visibility:hidden !important; }
+.msyh { font-family:"微软雅黑",Tahoma,Geneva,sans-serif,"宋体"; }
+
+.bg { background:url(img/bg_chs.png) no-repeat center top; }
+.container { background:url(img/left.png) no-repeat left bottom; margin:0 auto; position:relative; width:956px; zoom:1; }
+.container:after { content:""; display:block; clear:both; }
+.header { background:url(img/bg_chs.png) no-repeat center top; height:94px; }
+.header .logo { float:left; height:94px; width:289px; }
+.header .feedback { color:#FFFFFF; cursor:pointer; float:right; margin:68px 20px 0 0; }
+.left { background:#F8FDFF url(img/left.png) no-repeat left top; float:left; height:580px; padding-top:30px; width:210px; }
+.left a.nav_box { background:url(img/left_2.png) no-repeat left top; cursor:pointer; display:block; height:72px; margin-left:2px; padding:10px 0 0 20px; width:168px; }
+.left a.cur { background-position:left bottom; color:#FFF; width:auto; }
+.left a.nav_box span { color:#616C72; display:block; }
+.left a.cur span { color:#FFFFFF; display:block; }
+.left a.nav_box span.dt { font-family:'微软雅黑'; font-size:20px; height:26px; line-height:26px; padding-left:30px; }
+.left a.nav_box span.nav_1 { background:url(img/index_icon_1.png) no-repeat 0 -96px; }
+.left a.cur span.nav_1 { background:url(img/index_icon_1.png) no-repeat 0 -146px; }
+
+.right { background:#F8FDFF url(img/right.png) no-repeat right top; border-bottom:1px solid #D6D9DB; border-top:1px solid #80ADD9; float:left; min-height:530px; padding-bottom:80px; width:746px; }
+.reg_form { padding-top:50px; }
+.box { clear:both; height:auto; }
+.right .box { margin-right:3px; }
+.box .item { float:left; font-size:14px; height:44px; line-height:20px; padding-right:10px; padding-top:6px; text-align:right; width:179px; }
+.box .ipt_box { float:left; height:60px; position:relative; width:306px; }
+.bg_txt { background:url(img/ipt.png) no-repeat 0 0; border:none; height:35px; width:300px; }
+.bg_focus { background:url(img/ipt.png) no-repeat 0 -35px; }
+.bg_error { background:url(img/ipt.png) no-repeat 0 0; border:none; height:35px; width:300px; }
+.box .ipt_box input.new_txt { background:none; border:none; font-size:14px; height:18px; line-height:18px; padding:8px; width:284px; }
+.bg_error { background:url(img/input_error.png) no-repeat 0 0; border:none; height:35px; width:300px; }
+.box .info { float:left; height:40px; width:236px; }
+.box .info .tips { margin-left:6px; height:35px; vertical-align:middle; width:233px; }
+.box .info .tips div { padding-top:10px; }
+.box .error { background:url(img/error.png) no-repeat 0 11px; color:#F66; padding-left:16px; }
+.box .ok { background:url(img/ok.png) no-repeat 0 11px; color:#48A309; padding-left:16px; }
+.box .tip { background:none; padding-left:0; color:#808080; }
+.box .ipt_box .submit input { background:url(img/ipt.png) no-repeat 0 -344px; border:none; color:#FFF; cursor:pointer; display:inline-block; font:bold 22px/52px "微软雅黑"; height:52px; text-align:center; width:183px; }
+
+.right .reg_msg { background:url(img/success.gif) no-repeat 0 3px; margin:30px 0 20px 87px; }
+.right .reg_msg p { font-size:18px; line-height:32px; margin-left:70px; }
+.right .reg_msg p span { color:#575757; vertical-align:middle; }
+.rember_uin { position:relative; }
+.right .reg_msg .red_text { color:#D71D00; font-size:30px; margin-right:8px; vertical-align:middle; }
+.right .reg_msg .login_wrap { margin-left:70px; position:relative; width:500px; }
+.right .reg_msg .login_bg { background:url(img/login_btn_m.png) repeat-x 0 0; float:left; margin-top:24px; position:relative; }
+.right .reg_msg .login_btn { background:url(img/login_btn_l.png) no-repeat 0 0; border:none; color:#FFF; display:inline-block; font-size:22px; font-weight:600; height:52px; padding:0 72px 0 20px; text-align:center; }
+.right .reg_msg .login_area { background:url(img/login_btn_r.png) no-repeat 0 0; height:52px; outline:none; padding:0 10px; position:absolute; right:0; top:0; width:31px; }
+.right .reg_msg .login_btn a { color:#FFF; display:inline-block; line-height:52px; }
+.reg_main { display:none; }
+
+.footer { background:#FFF; color:#A6A6A6; margin:0 auto; padding:20px 0; text-align:center; width:956px; }
+.footer span { color:#A6A6A6; font-family:Tahoma,Verdana,Arial,'宋体'; }

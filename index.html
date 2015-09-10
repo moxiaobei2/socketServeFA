@@ -1,0 +1,1270 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>首页</title>
+<link rel="stylesheet" type="text/css" href="css/index.css"/>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+var doc = document;
+
+var config = {};
+config.host = 'localhost:8884';
+config.route = {
+	reg: 'reg.html'//reg表跳转跳路径
+};
+
+var global = {};
+global.login = false;//global.login默认是未登录
+
+window.onload = function () {
+	var _sock = io.connect('ws://' + config.host + '/');//_socket=io.connection("ws://"+config.host+'/')
+	var sock = null;
+	
+	_sock.on('open', function (data) {
+		sock = _sock;
+
+		if(!sock) {
+			alert('没有连接到服务器');
+			return;
+		}
+
+		var app = new App();//var app=new App();建立新的线程
+		app.init(sock);//初始化socket
+		
+		var app_01 = new AppMain();//主页面
+		app_01.init(sock);
+	});
+};
+
+// 主程序
+function AppMain(sock) {
+  this.obj = null;
+	this.sock = null;
+}
+
+AppMain.prototype = {//自定义方面
+	init: function (sock) {
+		this.elm = doc.querySelectorAll('.window_main')[0];
+		this.sock = sock;
+		this.draw();
+	},
+	draw: function () {
+		console.log(this.elm);
+		this.elm.style.display = 'block';
+		console.log(this.elm.offsetWidth);
+	}
+};
+
+function App(sock) {
+	var startAnimate = new StartAnimate();
+	var sideMenu = new SideMenu();
+	
+	startAnimate.loading(function () {
+		sideMenu.init();
+	});
+}
+
+App.prototype = {
+	init: function (sock) {
+		var _this = this;
+		this.sock = sock;
+		this.startAnimate = new StartAnimate();
+		this.sideMenu = new SideMenu();
+		
+		this.startAnimate.loading(function () {
+		  _this.sideMenu.init(sock);
+	  });
+	}
+};
+
+// 左侧菜单
+function SideMenu() {
+	this.loaded = false;
+	this.app = {};
+}
+
+SideMenu.prototype = {
+	init: function (sock) {
+		this.menu = doc.querySelectorAll('.left_bar')[0];
+		this.main = doc.querySelectorAll('.window_main')[0];
+		this.app.qq = doc.querySelectorAll('.dock_item_list .app_button_qq')[0];
+		this.app.qq.ui = doc.querySelectorAll('.ui_boxy_qq')[0];
+		this.app.qq.dialog = new DialogQQ(sock);
+		this.initAnimal();
+		this.addEvent();
+	},
+	addEvent: function () {
+		var _this = this;
+		
+		this.app.qq.onclick = function () {
+			if (!global.login) _this.disLoad(this);
+			else _this.disMain(this);
+		};
+	},
+	initAnimal: function () {
+		transitionMove(this.menu, {left: 0}, 500);
+	},
+	disLoad: function (obj) {
+		popup(this.app.qq.ui, true);
+	},
+	disMain: function () {
+		this.main.style.display = 'block';
+	}
+};
+
+// 开场动画
+function StartAnimate() {};
+
+StartAnimate.prototype = {
+	loading: function (fn) {
+		var loading = doc.querySelectorAll('.loading')[0];
+		transitionMove(loading, {opacity: 1}, 1000);
+		
+		var disktop = doc.querySelectorAll('.disktop')[0];
+		var bg = disktop.querySelectorAll('img')[0];
+		var timer = null;
+		
+		timer = setTimeout(function () {
+			bg.onload = function () {
+				transitionMove(loading, {opacity: 0}, 1000, function () {
+					loading.style.display = 'none';
+				});
+				transitionMove(disktop, {opacity: 1}, 1000, function () {
+					if (fn) fn();
+				});
+			};
+			bg.src = bg.getAttribute('_src');
+		}, 1000);
+	}
+};
+
+// 登录框
+function DialogQQ(sock) {
+	this.appMain = null;  // 主程序
+	this.appIcon = null;  // 右下角快捷方式
+	this.main = {};
+	this.task = {};
+	this.init(sock);
+	this.addEvent();
+}
+
+DialogQQ.prototype = {
+	init: function (sock) {
+	  this.obj = doc.querySelectorAll('.ui_boxy_qq')[0];
+		this.main.elm = doc.querySelectorAll('.window_main')[0];
+		this.task.elm = doc.querySelectorAll('.bottom_bar')[0];
+	  this.tips = this.obj.querySelectorAll('.err_m')[0];
+	  this.linkReg = this.obj.querySelectorAll('.link_reg')[0];
+	  this.btnLogin = this.obj.querySelectorAll('.logins .signin_btn')[0];
+		this.btnClose = this.obj.querySelectorAll('.close')[0];
+		this.iptUser = this.obj.querySelectorAll('.ipt_user')[0];
+		this.iptPass = this.obj.querySelectorAll('.ipt_pass')[0];
+		this.login = false;
+		this.sock = sock;
+	},
+	addEvent: function () {
+		var _this = this;
+		this.linkReg.onclick = this.gotoReg;
+		this.btnLogin.onclick = function () {
+			_this.clickLogin(this);
+		};
+		this.btnClose.onclick = function () {
+			_this.clickClose(this);
+		};
+	},
+	gotoReg: function () {
+		window.location.href = config.route.reg;
+	},
+	clickLogin: function (obj) {
+		// 如果检测成功则登录
+		if (this.checkUser() && this.checkPass()) {
+			this.openLogin();
+		}
+	},
+	clickClose: function () {
+		closePop(this.obj);
+	},
+	openLogin: function (data) {
+		var _this = this;
+		this.sock.removeAllListeners('login_result');
+		
+		// 查询 -> 查询成功登录
+		this.sock.on('login_result', function (data) {
+			if (!data.code) {
+				_this.showTips.call(_this, '正在登录...');
+				_this.showMain();
+				_this.showTask();
+				global.login = true;
+			} else {
+				switch (data.code) {
+					case 1: _this.showTips.call(_this, '您输入的帐号或密码不正确，请重新输入。');
+				}
+				global.login = false;
+			}
+		});
+		
+		// 检测 -> 检测成功发送
+    this.sock.emit('user_login', {user: this.iptUser.value, pass: this.iptPass.value});
+	},
+	showMain: function () {
+		closePop(this.obj);
+		this.main.elm.style.display = 'block';
+	},
+	showTask: function () {
+		this.task.elm.style.display = 'block';
+	},
+	showTips: function (str) {
+		this.tips.innerHTML = str;
+		this.tips.style.display = 'block';
+	},
+	hideTips: function () {
+		this.tips.innerHTML = '';
+		this.tips.style.display = 'none';
+	},
+	checkUser: function () {
+		if (regEmail(this.iptUser.value) || regQQ(this.iptUser.value) && this.iptUser.value.length) {
+			this.hideTips();
+			return true;
+		} else {
+			this.showTips('请输入正确的QQ帐号！');
+			this.tips.style.display = 'block';
+			return false;
+		}
+	},
+	checkPass: function () {
+		if (this.iptPass.value) {
+			this.hideTips();
+			return true;
+		} else {
+			this.showTips('您还没有输入密码！');
+			return false;
+		}
+	}
+};
+
+function regEmail(str) {
+	var re = /^([a-zA-Z0-9]+[_|\_|\.]?)*[a-zA-Z0-9]+@([a-zA-Z0-9]+[_|\_|\.]?)*[a-zA-Z0-9]+\.[a-zA-Z]{2,3}$/;
+	return re.test(str);
+}
+
+function regQQ(str) {
+	var re = /^\d{1,13}$/;
+	return re.test(str);
+}
+
+function popup(obj, mask) {
+	var z = maxZ();
+
+  obj.css = {};
+	obj.css.z = getStyle(obj, 'zIndex');
+	obj.css.position = getStyle(obj, 'position');
+	obj.css.left = getStyle(obj, 'left');
+	obj.css.top = getStyle(obj, 'top');
+	obj.css.marginLeft = getStyle(obj, 'marginLeft');
+	obj.css.marginTop = getStyle(obj, 'marginTop');
+	
+	obj.style.position = 'absolute';
+	obj.style.zIndex = z + 2;
+	obj.style.left = '50%';
+	obj.style.top = '50%';
+	obj.style.display = 'block';
+	obj.style.marginLeft = -obj.offsetWidth/2 + 'px';
+	obj.style.marginTop = -obj.offsetHeight/2 + 'px';
+	
+	if (mask) {
+		var oMask = doc.querySelectorAll('.ui_mask')[0];
+		oMask.style.opacity = 0.5;
+		oMask.style.zIndex = z + 1;
+		oMask.style.display = 'block';
+	}
+}
+
+function closePop(obj) {
+	var oMask = doc.querySelectorAll('.ui_mask')[0];
+	oMask.style.opacity = 0;
+	oMask.style.zIndex = 0;
+	oMask.style.display = 'none';
+	
+	obj.style.display = 'none';
+	
+	if (obj.css) {
+		var css = obj.css;
+		obj.style.zIndex = css.z;
+		obj.style.position = css.position;
+		obj.style.left = parseInt(css.left);
+		obj.style.top = parseInt(css.top);
+		obj.style.marginLeft = parseInt(css.marginLeft);
+		obj.style.marginTop = parseInt(css.marginTop);
+	}
+}
+
+function maxZ() {
+  var elements = doc.getElementsByTagName("*");
+  for(var i = 0, z = 0; i < elements.length; i++){
+    z = Math.max(z, !isNaN(getStyle(elements[i], 'zIndex')) ? getStyle(elements[i], 'zIndex') : 0 );
+  }
+  return z;
+}
+
+function getStyle(obj, attr) {
+	return obj.currentStyle ? obj.currentStyle[attr] : getComputedStyle(obj, false)[attr];
+}
+
+function setStyle3(obj, name, value) {
+	//transform、transition、borderRadius、boxShadow、textShadow
+	var aCss3 = ['transform', 'transition', 'borderRadius', 'boxShadow', 'textShadow', 'background'];
+	
+	if (aCss3.indexOf(name) != -1) {
+		obj.style['Webkit' + name.charAt(0).toUpperCase() + name.substring(1)] = value;
+		obj.style['Moz' + name.charAt(0).toUpperCase() + name.substring(1)] = value;
+		obj.style['ms' + name.charAt(0).toUpperCase() + name.substring(1)] = value;
+		obj.style['O' + name.charAt(0).toUpperCase() + name.substring(1)] = value;
+	}
+	
+	obj.style[name] = value;
+}
+
+function transitionMove(obj, json, iTime, fnEnd) {
+	if (!iTime) iTime = 500;
+	
+	obj.style.WebkitTransition = iTime + 'ms all ease';
+	obj.style.MozTransition = iTime + 'ms all ease';
+	
+	for (var i in json) {
+		setStyle3(obj, i, json[i]);
+	}
+	
+	setTimeout(function () {
+		obj.style.WebkitTransition = 'none';
+		obj.style.MozTransition = 'none';
+		if (fnEnd) fnEnd();
+	}, iTime + 50);
+}
+
+function getScroll() {
+	return document.documentElement.scrollTop || document.body.scrollTop;
+}
+
+function viewWidth() {
+	return document.documentElement.clientWidth;
+}
+
+function viewHeight() {
+	return document.documentElement.clientHeight;
+}
+
+function documentHeight() {
+	return Math.max(document.body.offsetHeight, document.documentElement.clientHeight);
+}
+</script>
+</head>
+
+<body>
+<!-- 加载页面 -->
+<div class="loading">
+  <div class="loading_center">
+    <div class="loading_logo"></div>
+    <p class="loading_stxt">Starting ...</p>
+    <div class="loading_sbar"></div>
+  </div>
+</div>
+<!-- 桌面 -->
+<div class="disktop">
+  <div class="disktop_bg"><img _src="images/blue_glow.jpg" /></div>
+  <div class="left_bar" style="top:200px; display:block;">
+    <div class="dock_container dock_pos_left">
+      <div class="dock_middle">
+        <div class="dock_item_list">
+          <div class="app_button app_button_qq">
+            <div class="app_icon ">
+              <img class="app_icon_img" src="images/big2.png" />
+            </div>
+          </div>
+          <!-- <div class="app_button">
+            <div class="app_icon ">
+              <img class="app_icon_img" src="images/big2.png" />
+            </div>
+          </div> -->
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 右下角图标 -->
+  <div class="bottom_bar">
+    <div class="task_container">
+      <div class="task_container_inner">
+        <div class="task_group task_group_ana_width task_current">
+          <div class="task_item_box">
+            <a href="#" class="task_item task_item_online">
+              <div class="task_item_icon">
+                <img src="css/img/mid.png" />
+              </div>
+              <div class="task_item_txt">QQ</div>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 底部新消息提示 -->
+  <div class="bubble_container">
+    <div class="bubble_panel">
+      <span title="消息管理器" class="icon setting"></span>
+      <div class="item">
+        <span class="icon single"></span>
+        <span class="body">
+          <span class="content">
+            <!-- <span class="nick">2804282013</span><span class="text">：请求添加您为好友，附加信息(无)</span> -->
+            <span class="nick">白雨丝</span><span class="text">：【图片】</span>
+          </span>
+        </span>
+        <span class="count">(1)</span>
+      </div>
+    </div>
+    <div class="bubble_msg_list" style="display:block;">
+      <h3>未读消息(<span class="count">2</span>)</h3>
+      <div class="bubble_msg_list_inner">
+        <div class="bubble_msg_list_container">
+          <ul>
+            <li class="item">
+              <a href="#">
+                <span class="count">(1)</span>
+                <span class="avatar system"></span>
+                <span class="content">
+                  <span class="content_inner">55915577：拒绝了您的请求，附加信息(无)</span>
+                </span>
+              </a>
+            </li>
+            <li class="item">
+              <a href="#">
+                <span class="count">(1)</span>
+                <span class="avatar system"></span>
+                <span class="content">
+                  <span class="content_inner">2804282013：请求添加您为好友，附加信息(无)</span>
+                </span>
+              </a>
+            </li>
+            <li class="item">
+              <a href="#">
+                <span class="count">(13)</span>
+                <img class="avatar" src="images/1.bmp" />
+                <span class="content">
+                  <span class="content_inner">DEDECMS视频模型：页面设计呢（平面部分的） </span>
+                </span>
+              </a>
+            </li>
+            <li class="item">
+              <a href="#">
+                <span class="count">(13)</span>
+                <img class="avatar" src="images/1.bmp" />
+                <span class="content">
+                  <span class="content_inner">DEDECMS视频模型：页面设计呢（平面部分的） </span>
+                </span>
+              </a>
+            </li>
+            <li class="item">
+              <a href="#">
+                <span class="count">(13)</span>
+                <img class="avatar" src="images/1.bmp" />
+                <span class="content">
+                  <span class="content_inner">DEDECMS视频模型：页面设计呢（平面部分的） </span>
+                </span>
+              </a>
+            </li>
+            <li class="item">
+              <a href="#">
+                <span class="count">(13)</span>
+                <img class="avatar" src="images/1.bmp" />
+                <span class="content">
+                  <span class="content_inner">DEDECMS视频模型：页面设计呢（平面部分的） </span>
+                </span>
+              </a>
+            </li>
+            <li class="item">
+              <a href="#">
+                <span class="count">(13)</span>
+                <img class="avatar" src="images/1.bmp" />
+                <span class="content">
+                  <span class="content_inner">DEDECMS视频模型：页面设计呢（平面部分的） </span>
+                </span>
+              </a>
+            </li>
+            <li class="item">
+              <a href="#">
+                <span class="count">(13)</span>
+                <img class="avatar" src="images/1.bmp" />
+                <span class="content">
+                  <span class="content_inner">DEDECMS视频模型：页面设计呢（平面部分的） </span>
+                </span>
+              </a>
+            </li>
+            <li class="item">
+              <a href="#">
+                <span class="count">(13)</span>
+                <img class="avatar" src="images/1.bmp" />
+                <span class="content">
+                  <span class="content_inner">DEDECMS视频模型：页面设计呢（平面部分的） </span>
+                </span>
+              </a>
+            </li>
+            <li class="item">
+              <a href="#">
+                <span class="count">(13)</span>
+                <img class="avatar" src="images/1.bmp" />
+                <span class="content">
+                  <span class="content_inner">DEDECMS视频模型：页面设计呢（平面部分的） </span>
+                </span>
+              </a>
+            </li>
+            <li class="item">
+              <a href="#">
+                <span class="count">(13)</span>
+                <img class="avatar" src="images/1.bmp" />
+                <span class="content">
+                  <span class="content_inner">DEDECMS视频模型：页面设计呢（平面部分的） </span>
+                </span>
+              </a>
+            </li>
+          </ul>
+        </div>
+        <div class="bubble_msg_buttons">
+          <a class="cancel_notify" href="#">忽略提醒</a>
+          <a class="view_all" href="#">查看全部</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="disktop_wrap">
+    <div class="desktop_container desktop_current">
+      <!-- 查找好友 -->
+      <div class="window window_find" style="width: 562px; height: 442px; left: 365.5px; top: 0px; visibility: visible; z-index: 1888888;">
+        <div class="window_outer eqq_window window_has_control_area" style="padding: 10px; height: 420px; z-index: 17;">
+          <div class="window_inner">
+            <div class="window_bg_container"></div>
+            <div class="window_content">
+              <div class="window_title_bar">
+                <div class="window_title_button_bar">
+                  <a class="ui_button window_action_button window_close" title="关闭" href="#"></a>
+                </div>
+                <div class="window_title title_text">查找好友</div>
+              </div>
+              <div class="window_body_outer">
+                <div class="window_body_area">
+                  <div class="buddy_finder_container">
+                    <div class="content_area">
+                      <div class="buddy_finder_tab_head_area">
+                        <div class="current">查找好友</div>
+                        <!--<div>查找群</div>-->
+                      </div>
+                      <div class="buddy_finder_tab_body_area finder_body">
+                        <div class="buddy_finder">
+                          <div class="finder_container">
+                            <!-- s_box 搜索条件页面 -->
+                            <div class="s_box" style="display:none;">
+                              <div class="buddy_finder_endline">
+                                查找方式
+                                <hr class="line" />
+                              </div>
+                              <div class="s_option_box">
+                                <div>
+                                  <input class="type_input" type="radio" checked="checked" name="bf_s"><span>精确查找</span>
+                                </div>
+                                <div>
+                                  <input class="type_input" type="radio" name="bf_s"><span>按条件查找</span>
+                                </div>
+                              </div>
+                              <div class="s_ip_box">
+                                <p class="s_ip_box_txt">帐号：</p>
+                                <input type="text" class="search_input gray" value="请输入对方数字帐号或Email帐号" />
+                                <p class="s_ip_box_txt">昵称：</p>
+                                <input type="text" class="search_input gray" value="请输入对方昵称" />
+                              </div>
+                            </div>
+                            
+                            <!-- r_box 搜索结果页面 ajax动态加载 一次显示10个 -->
+                            <div class="r_box" style="display:block;">
+                              <div class="buddy_finder_endline">
+                                查找结果
+                                <hr class="line" />
+                              </div>
+                              <div class="result_box">
+                                <div>
+                                  <div class="buddy_finder_tiny_info">
+                                    <div class="buddy_finder_tiny_info_info">
+                                      <img class="buddy_finder_tiny_info_info_avatar" src="images/1.bmp" />
+                                      <div class="buddy_finder_tiny_info_info_t">
+                                        <div class="buddy_finder_tiny_info_info_t_showname">
+                                          小草(2429766883)
+                                        </div>
+                                      </div>
+                                      <div class="buddy_finder_tiny_info_info_d">
+                                        <span class="nbsp">性别: 女</span>
+                                        <span class="nbsp">年龄: 23</span>
+                                        <span class="nbsplast">来自: 中国新疆</span>
+                                      </div>
+                                    </div>
+                                    <div class="buddy_finder_tiny_info_button">
+                                      <div class="buddy_finder_tiny_info_button_l">
+                                      详细资料
+                                      </div>
+                                      <div class="buddy_finder_tiny_info_button_r">
+                                      加为好友
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div class="buddy_finder_tiny_info buddy_finder_tiny_info_fix">
+                                    <div class="buddy_finder_tiny_info_info">
+                                      <img class="buddy_finder_tiny_info_info_avatar" src="images/1.bmp" />
+                                      <div class="buddy_finder_tiny_info_info_t">
+                                        <div class="buddy_finder_tiny_info_info_t_showname">
+                                          小草(2429766883)
+                                        </div>
+                                      </div>
+                                      <div class="buddy_finder_tiny_info_info_d">
+                                        <span class="nbsp">性别: 女</span>
+                                        <span class="nbsp">年龄: 23</span>
+                                        <span class="nbsplast">来自: 中国新疆</span>
+                                      </div>
+                                    </div>
+                                    <div class="buddy_finder_tiny_info_button">
+                                      <div class="buddy_finder_tiny_info_button_l">
+                                      详细资料
+                                      </div>
+                                      <div class="buddy_finder_tiny_info_button_r">
+                                      加为好友
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div class="buddy_finder_tiny_info">
+                                    <div class="buddy_finder_tiny_info_info">
+                                      <img class="buddy_finder_tiny_info_info_avatar" src="images/1.bmp" />
+                                      <div class="buddy_finder_tiny_info_info_t">
+                                        <div class="buddy_finder_tiny_info_info_t_showname">
+                                          小草(2429766883)
+                                        </div>
+                                      </div>
+                                      <div class="buddy_finder_tiny_info_info_d">
+                                        <span class="nbsp">性别: 女</span>
+                                        <span class="nbsp">年龄: 23</span>
+                                        <span class="nbsplast">来自: 中国新疆</span>
+                                      </div>
+                                    </div>
+                                    <div class="buddy_finder_tiny_info_button">
+                                      <div class="buddy_finder_tiny_info_button_l">
+                                      详细资料
+                                      </div>
+                                      <div class="buddy_finder_tiny_info_button_r">
+                                      加为好友
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div class="buddy_finder_tiny_info buddy_finder_tiny_info_fix">
+                                    <div class="buddy_finder_tiny_info_info">
+                                      <img class="buddy_finder_tiny_info_info_avatar" src="images/1.bmp" />
+                                      <div class="buddy_finder_tiny_info_info_t">
+                                        <div class="buddy_finder_tiny_info_info_t_showname">
+                                          小草(2429766883)
+                                        </div>
+                                      </div>
+                                      <div class="buddy_finder_tiny_info_info_d">
+                                        <span class="nbsp">性别: 女</span>
+                                        <span class="nbsp">年龄: 23</span>
+                                        <span class="nbsplast">来自: 中国新疆</span>
+                                      </div>
+                                    </div>
+                                    <div class="buddy_finder_tiny_info_button">
+                                      <div class="buddy_finder_tiny_info_button_l">
+                                      详细资料
+                                      </div>
+                                      <div class="buddy_finder_tiny_info_button_r">
+                                      加为好友
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div class="buddy_finder_tiny_info">
+                                    <div class="buddy_finder_tiny_info_info">
+                                      <img class="buddy_finder_tiny_info_info_avatar" src="images/1.bmp" />
+                                      <div class="buddy_finder_tiny_info_info_t">
+                                        <div class="buddy_finder_tiny_info_info_t_showname">
+                                          小草(2429766883)
+                                        </div>
+                                      </div>
+                                      <div class="buddy_finder_tiny_info_info_d">
+                                        <span class="nbsp">性别: 女</span>
+                                        <span class="nbsp">年龄: 23</span>
+                                        <span class="nbsplast">来自: 中国新疆</span>
+                                      </div>
+                                    </div>
+                                    <div class="buddy_finder_tiny_info_button">
+                                      <div class="buddy_finder_tiny_info_button_l">
+                                      详细资料
+                                      </div>
+                                      <div class="buddy_finder_tiny_info_button_r">
+                                      加为好友
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div class="buddy_finder_tiny_info buddy_finder_tiny_info_fix">
+                                    <div class="buddy_finder_tiny_info_info">
+                                      <img class="buddy_finder_tiny_info_info_avatar" src="images/1.bmp" />
+                                      <div class="buddy_finder_tiny_info_info_t">
+                                        <div class="buddy_finder_tiny_info_info_t_showname">
+                                          小草(2429766883)
+                                        </div>
+                                      </div>
+                                      <div class="buddy_finder_tiny_info_info_d">
+                                        <span class="nbsp">性别: 女</span>
+                                        <span class="nbsp">年龄: 23</span>
+                                        <span class="nbsplast">来自: 中国新疆</span>
+                                      </div>
+                                    </div>
+                                    <div class="buddy_finder_tiny_info_button">
+                                      <div class="buddy_finder_tiny_info_button_l">
+                                      详细资料
+                                      </div>
+                                      <div class="buddy_finder_tiny_info_button_r">
+                                      加为好友
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div class="buddy_finder_tiny_info">
+                                    <div class="buddy_finder_tiny_info_info">
+                                      <img class="buddy_finder_tiny_info_info_avatar" src="images/1.bmp" />
+                                      <div class="buddy_finder_tiny_info_info_t">
+                                        <div class="buddy_finder_tiny_info_info_t_showname">
+                                          小草(2429766883)
+                                        </div>
+                                      </div>
+                                      <div class="buddy_finder_tiny_info_info_d">
+                                        <span class="nbsp">性别: 女</span>
+                                        <span class="nbsp">年龄: 23</span>
+                                        <span class="nbsplast">来自: 中国新疆</span>
+                                      </div>
+                                    </div>
+                                    <div class="buddy_finder_tiny_info_button">
+                                      <div class="buddy_finder_tiny_info_button_l">
+                                      详细资料
+                                      </div>
+                                      <div class="buddy_finder_tiny_info_button_r">
+                                      加为好友
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div class="buddy_finder_tiny_info buddy_finder_tiny_info_fix">
+                                    <div class="buddy_finder_tiny_info_info">
+                                      <img class="buddy_finder_tiny_info_info_avatar" src="images/1.bmp" />
+                                      <div class="buddy_finder_tiny_info_info_t">
+                                        <div class="buddy_finder_tiny_info_info_t_showname">
+                                          小草(2429766883)
+                                        </div>
+                                      </div>
+                                      <div class="buddy_finder_tiny_info_info_d">
+                                        <span class="nbsp">性别: 女</span>
+                                        <span class="nbsp">年龄: 23</span>
+                                        <span class="nbsplast">来自: 中国新疆</span>
+                                      </div>
+                                    </div>
+                                    <div class="buddy_finder_tiny_info_button">
+                                      <div class="buddy_finder_tiny_info_button_l">
+                                      详细资料
+                                      </div>
+                                      <div class="buddy_finder_tiny_info_button_r">
+                                      加为好友
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="window_control_area">
+                <a class="ui_button window_button window_cancel" href="#">取消</a>
+                <a class="ui_button window_button window_next" href="#">查找</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 添加好友弹层 -->
+      <div class="window window_add_firend" style="width: 372px; height: 307px; left: 627px; top: 69px; visibility: visible; z-index: 39499999;">
+        <div class="window_outer eqq_window window_has_control_area" style="padding: 10px; height: 285px; z-index: 388;">
+          <div class="window_inner">
+            <div class="window_bg_container"></div>
+            <div class="window_content">
+              <div class="window_title_bar">
+                <div class="window_title_button_bar">
+                  <a class="ui_button window_action_button window_close" title="关闭" href="#"></a>
+                </div>
+                <div class="window_title title_text">添加好友</div>
+              </div>
+              <div class="window_body_outer" style="width: 350px; top: 25px; height: 230px;">
+                <div class="window_body_area" style="bottom: 29px; width: 350px; height: 230px;">
+                  <div class="buddy_adder_area">
+                    <div class="buddy_adder_area_panel">
+                      <div class="buddy_adder_area_p13">您将添加以下好友:</div>
+                      <img src="images/1.bmp" class="buddy_adder_area_avatar" title="查看资料 /">
+                      <div class="buddy_adder_area_nick" title="查看资料">寂摸小护土</div>
+                      <div class="buddy_adder_area_rename">
+                        <span>备注:</span>
+                        <input type="text" value="" class="buddy_adder_area_input" />
+                      </div>
+                      <div class="buddy_adder_area_categories">
+                        <span>分组:</span>
+                        <div class="buddy_adder_area_popup">
+                          <div class="text">我的好友</div>
+                          <div class="buddy_adder_area_arr div_select_arr">down</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="window_control_area">
+                <a class="ui_button window_button window_cancel" href="#">取消</a>
+                <a class="ui_button window_button window_ok" href="#">确定</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 添加好友审核弹层 -->
+      <div class="window window_adder_audit" style="width: 372px; height: 307px; left: 497px; top: 25.5px; visibility: visible; z-index: 439999999;">
+        <div class="window_outer eqq_window window_has_control_area" style="padding: 10px; height: 285px; z-index: 423;">
+          <div class="window_inner">
+            <div class="window_bg_container"></div>
+            <div class="window_content">
+              <div class="window_title_bar">
+                <div class="window_title_button_bar">
+                  <a class="ui_button window_action_button window_close" title="关闭" href="#"></a>
+                </div>
+                <div class="window_title title_text">添加好友</div>
+              </div>
+              <div class="window_body_outer" style="width: 350px; top: 25px; height: 230px;">
+                <div class="window_tool_bar"></div>
+                <div class="window_body_area" style="bottom: 29px; width: 350px; height: 230px;">
+                  <div class="buddy_adder_area">
+                    <div class="buddy_adder_area_panel">
+                      <img src="images/1.bmp" class="buddy_adder_area_avatar" title="查看资料" />
+                      <div class="buddy_adder_area_nick" title="查看资料">2804282013(2804282013)</div>
+                      <div>请求添加您为好友!</div>
+                      <div class="buddy_adder_area_msg">
+                        <div style="height:50px;overflow:auto;">附加信息:(无)</div>
+                      </div>
+                      <label class="buddy_adder_area_aradio">
+                        <input type="radio" name="ra927460121" class="radio" value="同意并添加对方为好友" checked="checked" />									                        <span class="buddy_adder_area_lable_text">同意并添加对方为好友</span>
+                      </label>
+                      <div class="buddy_adder_area_content" style="display: block;">
+                        <div class="buddy_adder_area_rename2">
+                          <span>备注:</span>
+                          <input type="text" value="" class="buddy_adder_area_input" />
+                        </div>
+                        <div class="buddy_adder_area_categories2">
+                          <span>分组:</span>
+                          <div class="buddy_adder_area_popup">
+                            <div class="text">我的好友</div>
+                            <div class="buddy_adder_area_arr div_select_arr">down</div>
+                          </div>
+                        </div>
+                      </div>
+                      <label class="buddy_adder_area_aradio">
+                        <input type="radio" class="radio" value="同意" />
+                        <span class="buddy_adder_area_lable_text">同意</span>
+                      </label>
+                      <div class="buddy_adder_area_content" style="display: none;"></div>
+                      <label class="buddy_adder_area_aradio">
+                        <input type="radio" class="radio" value="拒绝" />
+                        <span class="buddy_adder_area_lable_text">拒绝</span>
+                      </label>
+                      <div style="display: block;" class="buddy_adder_area_content">
+                        <div class="buddy_adder_area_msg2">
+                          <div>请输入拒绝理由:</div>
+                          <textarea value="" type="text" class="buddy_adder_area_q_input"></textarea>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="window_control_area" style="display: block;">
+                <a class="ui_button window_button window_cancel" title="" href="#" style="display: block;">取消</a>
+                <a class="ui_button window_button window_ok" title="" href="#" style="display: block;">确定</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 主程序 -->
+      <div class="window window_main" style="height: 546px; display:block;">
+        <div class="window_outer eqq_window" style="padding: 10px; height: 526px; z-index: 11;">
+          <div class="window_inner">
+            <div class="window_bg_container"></div>
+            <div class="window_content">
+              <div class="window_title_bar">
+                <div class="window_title_button_bar">
+                  <a class="ui_button window_action_button window_close" title="关闭" href="#"></a>
+                  <a class="ui_button window_action_button window_min" title="最小化" href="#"></a>
+                </div>
+                <div class="window_title title_text">QQ</div>
+              </div>
+              <div class="window_body_outer">
+                <div class="window_body_area">
+                  <div class="eqq_my_panel">
+                    <img class="eqq_my_avatar" src="images/getface.bmp" title="修改资料">
+                    <div class="eqq_my_info">
+                      <div title="更改在线状态" class="eqq_my_state">
+                        <div class="eqq_my_state_show eqq_online">状态</div>
+                        <div class="eqq_my_state_down">下</div>
+                      </div>
+                      <div title="蓝色动力&lt;55915577&gt;" class="eqq_my_nick">蓝色动力</div>
+                    </div>
+                    <div class="eqq_my_service">
+                      <div class="eqq_my_signature_wraper eqq_my_signature_edit eqq_my_signature_hover">
+                        <input type="text" title="点击编辑签名" value="点击编辑签名" class="eqq_my_signature" />
+                      </div>
+                    </div>
+                  </div>
+                  <div class="eqq_mypanel_toolbar">
+                    <a class="eqq_mypanel_toolbar_button" title="QQ邮箱" href="#">
+                      <span class="eqq_mypanel_toolbar_icon eqq_mypanel_toolbar_mail"></span>
+                    </a>
+                  </div>
+                  <div class="eqq_main_panel">
+                    <div class="eqq_login_success">
+                      <div class="eqq_search_bar">
+                        <input type="text" title="搜索好友..." value="搜索好友..." class="eqq_search_box" />
+                        <div title="搜索..." class="eqq_search_button">搜索按钮</div>
+                      </div>
+                      <ul class="eqq_tab">
+                        <li title="联系人" class="eqq_tab_buddy_list current">
+                          <a class="eqq_tabmenu_icon" href="#"></a>
+                          <div class="eqq_tab_buddy_list_icon tab_icon"></div>
+                        </li>
+                      </ul>
+                      <!-- 高度需要计算 包括底部工具栏高度 -->
+                      <div class="eqq_list_container" style="height:355px;">
+                        <!-- 高度需要计算 不包括底部工具栏高度25px -->
+                        <div class="eqq_buddy_list_panel eqq_list_big_head" style="height:330px;">
+                          <div class="eqq_buddy_list eqq_buddy_list_none_flash">
+                            <!-- 收缩 -->
+                            <div class="eqq_list_class_head_collapsed">
+                              <div class="eqq_list_class_head_icon">icon</div>
+                              <div title="我的好友" class="eqq_class_list_right_container">
+                                <div class="eqq_class_class_name">我的好友&nbsp;</div>[<span class="eqq_class_online_counter">7</span>/<span class="eqq_class_counter">21</span>]</div>
+                            </div>
+                            
+                            <!-- 展开 -->
+                            <div class="eqq_list_class_head_expand expand">
+                              <div class="eqq_list_class_head_icon">icon</div>
+                              <div title="我的好友" class="eqq_class_list_right_container">
+                                <div class="eqq_class_class_name">我的好友&nbsp;</div>[<span class="eqq_class_online_counter">7</span>/<span class="eqq_class_counter">21</span>]</div>
+                            </div>
+                            <div class="eqq_list_class_body" style="height:auto;">
+                              <div class="eqq_online_buddy" style="display:block;">
+                                <!-- 正常qq -->
+                                <div class="eqq_buddy_list_buddy">
+                                  <div class="eqq_buddy_list_client_type" title="手机QQ">
+                                    <div class="eqq_buddy_list_client_type_phone"></div>
+                                  </div>
+                                  <div class="eqq_buddy_list_avatar_container" title="在线">
+                                    <img src="images/1.bmp" class="eqq_buddy_list_avatar" />
+                                  </div>
+                                  <div class="eqq_buddy_list_right_container">
+                                    <div class="eqq_buddy_list_nick">赵文昕</div>
+                                    <div class="eqq_buddy_list_sign" title="必瘦！">必瘦！！</div>
+                                  </div>
+                                </div>
+                                
+                                <!-- 来信息 -->
+                                <div class="eqq_buddy_list_buddy eqq_jump_up_in_buddy_list">
+                                  <div class="eqq_buddy_list_client_type" title="手机QQ">
+                                    <div class="eqq_buddy_list_client_type_phone"></div>
+                                  </div>
+                                  <div class="eqq_buddy_list_avatar_container" title="在线">
+                                    <img src="images/1.bmp" class="eqq_buddy_list_avatar" />
+                                  </div>
+                                  <div class="eqq_buddy_list_right_container">
+                                    <div class="eqq_buddy_list_nick">赵文昕</div>
+                                    <div class="eqq_buddy_list_sign" title="必瘦！">必瘦！！</div>
+                                  </div>
+                                </div>
+                                
+                                <!-- 离线 -->
+                                <div class="eqq_buddy_list_buddy eqq_offline_buddy">
+                                  <div class="eqq_buddy_list_client_type" title="手机QQ">
+                                    <div class="eqq_buddy_list_client_type_phone"></div>
+                                  </div>
+                                  <div class="eqq_buddy_list_avatar_container" title="离线">
+                                    <img src="images/1.bmp" class="eqq_buddy_list_avatar" />
+                                  </div>
+                                  <div class="eqq_buddy_list_right_container">
+                                    <div class="eqq_buddy_list_nick">赵文昕</div>
+                                    <div class="eqq_buddy_list_sign" title="必瘦！">必瘦！！</div>
+                                  </div>
+                                </div>
+                                
+                                <!-- 离线 -->
+                                <div class="eqq_buddy_list_buddy eqq_offline_buddy">
+                                  <div class="eqq_buddy_list_client_type" title="手机QQ">
+                                    <div class="eqq_buddy_list_client_type_phone"></div>
+                                  </div>
+                                  <div class="eqq_buddy_list_avatar_container" title="离线">
+                                    <img src="images/1.bmp" class="eqq_buddy_list_avatar" />
+                                  </div>
+                                  <div class="eqq_buddy_list_right_container">
+                                    <div class="eqq_buddy_list_nick">赵文昕</div>
+                                    <div class="eqq_buddy_list_sign" title="必瘦！">必瘦！！</div>
+                                  </div>
+                                </div>
+                                
+                                <!-- 离线 -->
+                                <div class="eqq_buddy_list_buddy eqq_offline_buddy">
+                                  <div class="eqq_buddy_list_client_type" title="手机QQ">
+                                    <div class="eqq_buddy_list_client_type_phone"></div>
+                                  </div>
+                                  <div class="eqq_buddy_list_avatar_container" title="离线">
+                                    <img src="images/1.bmp" class="eqq_buddy_list_avatar" />
+                                  </div>
+                                  <div class="eqq_buddy_list_right_container">
+                                    <div class="eqq_buddy_list_nick">赵文昕</div>
+                                    <div class="eqq_buddy_list_sign" title="必瘦！">必瘦！！</div>
+                                  </div>
+                                </div>
+                                
+                                <!-- 离线 -->
+                                <div class="eqq_buddy_list_buddy eqq_offline_buddy">
+                                  <div class="eqq_buddy_list_client_type" title="手机QQ">
+                                    <div class="eqq_buddy_list_client_type_phone"></div>
+                                  </div>
+                                  <div class="eqq_buddy_list_avatar_container" title="离线">
+                                    <img src="images/1.bmp" class="eqq_buddy_list_avatar" />
+                                  </div>
+                                  <div class="eqq_buddy_list_right_container">
+                                    <div class="eqq_buddy_list_nick">赵文昕</div>
+                                    <div class="eqq_buddy_list_sign" title="必瘦！">必瘦！！</div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <!-- 底部工具栏 -->
+                          <div class="eqq_list_bottom">
+                            <a target="_blank" class="search_buddy" href="javascript:;"><div class="search_buddy_div"></div>查找</a>
+                            <a target="_blank" class="message_manage_icon" href="javascript:;"><div class="message_manage_icon_div"></div>消息管理</a>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 弹窗 -->
+      <!-- 高度动态计算 比内层多20px -->
+      <div class="window" style="width: 445px; height: 450px; left: 95px; top: -6px; visibility: visible; z-index: 23;">
+        <!-- 高度动态计算 比外层少20px -->
+        <div class="window_outer eqq_window" style="height:430px;">
+          <div class="window_inner">
+            <div class="window_bg_container chatform_bg"></div>
+            <div class="window_content">
+              <div class="window_title_bar chatform_title_bar">
+                <div class="window_title_button_bar">
+                  <a class="ui_button window_action_button window_close" title="关闭" href="#"></a>
+                  <a class="ui_button window_action_button window_max" title="最大化" href="#"></a>
+                  <a class="ui_button window_action_button window_min" title="最小化" href="#"></a>
+                </div>
+                <div class="window_title title_text chatform_title_text">
+                  <div class="chat_box_buddy_avatar_area online_buddy_in_chatbox">
+                    <img class="avatar_in_chatbox" src="images/1.bmp" />
+                  </div>
+                  <div class="chat_box_name_area">
+                    <a class="chat_box_all_name title_text" href="#">
+                      <span class="chat_box_main_name">田振伟</span>
+                      <div class="chatform_state">
+                        <span>[</span>
+                        <span class="chat_box_client_type_phone">&nbsp;&nbsp;&nbsp;&nbsp;</span>
+                        <span>使用手机QQ中]</span>
+                      </div>
+                    </a>
+                  </div>
+                  <div class="chat_box_more_info_area">
+                    <a target="_blank" href="#" title="查看QQ空间" class="eqq_chatbox_qzone_icon"></a>
+                    <div class="chat_box_announcement_area">
+                      <span title="不是我口音怪好不好，只是因为北方和南方两边跑的缘故。">不是我口音怪好不好，只是因为北方和南方两边跑的缘故。</span>
+                    </div>
+                  </div>
+                  <div class="chat_box_button_bar">
+                    <a hidefocus="true" class="chat_box_file_button chat_box_menu_button" href="#">
+                      <div title="发送文件..." class="chat_box_send_file_button"></div>
+                    </a>
+                  </div>
+                </div>
+              </div>
+              <div class="window_body_outer" style="width: 425px; top: 83px; height: 347px;">
+                <div class="window_body_area">
+                  <div class="chat_box_main_area">
+                    <div class="chat_box_chat_board">
+                      <div class="chat_box_msg_list">
+                        <dl class="chat_box_my_msg">
+                          <dt class="msg_head">
+                            <span class="nick">蓝色动力</span><span class="date">2013-04-05 22:56:02</span>
+                          </dt>
+                          <dd class="msg_body default_font_style">
+                            <img src="css/img/emo/65.gif" class="eqq_face_img" /><br />
+                          </dd>
+                        </dl>
+                        <dl class="chat_box_my_msg">
+                          <dt class="msg_head">
+                            <span class="nick">蓝色动力</span><span class="date">2013-04-05 22:56:02</span>
+                          </dt>
+                          <dd class="msg_body default_font_style">
+                            湿湿<br />
+                          </dd>
+                        </dl>
+                        <dl class="chat_box_my_msg">
+                          <dt class="msg_head">
+                            <span class="nick">蓝色动力</span><span class="date">2013-04-05 22:56:02</span>
+                          </dt>
+                          <dd class="msg_body default_font_style">
+                            湿湿<br />
+                          </dd>
+                        </dl>
+                        <dl class="chat_box_my_msg">
+                          <dt class="msg_head">
+                            <span class="nick">蓝色动力</span><span class="date">2013-04-05 22:56:02</span>
+                          </dt>
+                          <dd class="msg_body default_font_style">
+                            湿湿<br />
+                          </dd>
+                        </dl>
+                        <dl class="chat_box_my_msg">
+                          <dt class="msg_head">
+                            <span class="nick">蓝色动力</span><span class="date">2013-04-05 22:56:02</span>
+                          </dt>
+                          <dd class="msg_body default_font_style">
+                            湿湿<br />
+                          </dd>
+                        </dl>
+                        <dl class="chat_box_buddy_msg">
+                          <dt class="msg_head">
+                            <span class="nick">湿湿</span><span class="date">2013-04-05 22:56:02</span>
+                          </dt>
+                          <dd class="msg_body default_font_style">
+                            湿湿<br />
+                          </dd>
+                        </dl>
+                        <dl class="chat_box_my_msg">
+                          <dt class="msg_head">
+                            <span class="nick">蓝色动力</span><span class="date">2013-04-05 22:56:02</span>
+                          </dt>
+                          <dd class="msg_body default_font_style">
+                            湿湿<br />
+                          </dd>
+                        </dl>
+                      </div>
+                    </div>
+                    <div class="chat_box_tool_bar_top">pull me</div>
+                    <div class="chat_box_tool_bar">
+                      <a href="#"><div title="设置字体颜色和格式" class="chat_box_font_button"></div></a>
+                      <a href="#"><div title="表情" class="chat_box_face_button"></div></a>
+                      <a href="#"><div title="向好友发送窗口抖动" class="chat_box_shake_button"></div></a>
+                      <a href="#"><div title="发送图片..." class="chat_box_send_pic_button"></div></a>
+                      <a href="#"><div title="清屏" class="chat_box_clear_button"></div></a>
+                      <a href="#" title="消息记录" class="chat_box_history_button_con">
+                        <div class="chat_box_history_button"></div>
+                        <div class="chat_box_history_buttontxt">消息记录</div>
+                      </a>
+                    </div>
+                    <div class="chat_box_input_box">
+                      <div class="rich_editor">
+                        <div contenteditable="true" class="rich_editor_div">
+                          <br />
+                        </div>
+                        <textarea class="rich_editor_text"></textarea>
+                      </div>
+                    </div>
+                    <div class="chat_box_control_panel">
+                      <a title="修改发送快捷键" class="chat_box_send_option_button" href="#"></a>
+                      <a title="发送" class="chat_box_send_msg_button" href="#">发&#12288;送</a>
+                      <a title="关闭" class="chat_box_close_button" href="#">关&#12288;闭</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="ui_boxy ui_boxy_qq">
+    <div class="close">
+      <div class="ui_boxy_close"></div>
+    </div>
+    <div class="ui_boxy_wrap">
+      <div class="login_content_area">
+        <div class="login_logo_qq"></div>
+        <div class="login_window_wrap">
+          <div class="signin">
+            <div class="subcolumn01"></div>
+            <div class="subcolumn02">
+              <div class="banner"></div>
+              <div class="signin_area">
+                <div class="signin_area_bg">
+                  <div class="padder">
+                    <div class="err_m">您输入的帐号或密码不正确，请重新输入。<a target="_blank" href="#">找回密码</a></div>
+                    <!-- 没输入账号或密码 -> 请输入正确的QQ帐号！意见反馈 -->
+                    <div class="sign_input">
+                      <span class="title account">帐&#12288;号：</span>
+                      <span class="input"><input type="text" onblur="if (value ==''){value='QQ号码或Email帐号';}" onfocus="if (value =='QQ号码或Email帐号'){value =''}" value="QQ号码或Email帐号" tabindex="1" class="input01 ipt_user" autocomplete="on"></span>
+                      <span class="link link_reg"><a href="#">注册</a></span>
+                    </div>
+                    <div class="sign_input">
+                      <span class="title password">密&#12288;码：</span>
+                      <span class="input"><input type="password" tabindex="2" class="input01 ipt_pass" autocomplete="on"></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="subcolumn03">
+              <div class="left">
+                <div class="middle">
+                  <div class="middle_padder">
+                    <div class="logins">
+                      <input type="button" tabindex="6" value="" class="signin_btn signin2">
+                      <div class="login_state_trigger login_state_trigger2 login_state">
+                        <div class="login_state_show online">状态</div>
+                        <!-- <div class="login_state_down">下</div> -->
+                        <div class="login_state_txt">我在线上</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="ui_mask"></div>
+</div>
+</body>
+</html>
